@@ -1,0 +1,32 @@
+
+# Created by https://www.toptal.com/developers/gitignore/api/erlang,vuejs
+# Edit at https://www.toptal.com/developers/gitignore?templates=erlang,vuejs
+
+### Erlang ###
+.eunit
+*.o
+*.beam
+*.plt
+erl_crash.dump
+.concrete/DEV_MODE
+
+# rebar 2.x
+.rebar
+rel/example_project
+ebin/*.beam
+deps
+
+# rebar 3
+.rebar3
+_build/
+_checkouts/
+
+### Vuejs ###
+# Recommended template: Node.gitignore
+
+node_modules/
+dist/
+npm-debug.log
+yarn-error.log
+
+# End of https://www.toptal.com/developers/gitignore/api/erlang,vuejs
