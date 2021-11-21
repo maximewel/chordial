@@ -25,7 +25,7 @@ The back-end is done in Erlang, with two processes per DHT nodes (see mockups).\
 ## Mockups
 The mockups try to convey the project structure to a reader and guide the implementaion of the view according to a predetermined design.\
 \
-[Web view](/img/view.png)\
+![Web view](/img/view.png)\
 _Web view_\
 The web view is simple:
 * The central element is the canvas representing the DHT table as its nodes.
@@ -33,12 +33,12 @@ The web view is simple:
 
 This view should reflect the DHT state when a node is added, when a node leaves, and should show the path of a message when looking up or adding a value. It should also shows the state of each DHT nodes, as in its fingers and current values.\
 \
-[Node interaction](/img/node_interactions.png)
+![Node interaction](/img/node_interactions.png)
 _Node interactions_\
 The first 'root' node is used as a simplification for the web view - this node is always present and is used as an endpoint to add/lookup tables.\
 This first node is also usefull for the connection of new nodes - we can easily think about serving the table's nodes IPs to a node that want to join. That way, the joining node is served the list of nodes and is still responsible of contacting its peers to manage its addition to the system.
 \
-[DHT Nodes](/img/dht_nodes.png)
+![DHT Nodes](/img/dht_nodes.png)
 _DHT Nodes_\
 Each DHT node is actually composed of two erlang processes:
 * The DHT process, which has the code for indexing, joining or leaving the table
