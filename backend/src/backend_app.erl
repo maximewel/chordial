@@ -11,23 +11,15 @@
 
 %Register routes
 start(_StartType, _StartArgs) ->
-    {ok, Pid} = 'backend_sup':start_link(),
-    Routes = [ {
-        '_',
-        [
-            {"/", dht_node, []}
-        ]
-    } ],
-    Dispatch = cowboy_router:compile(Routes),
+    Dispatch = cowboy_router:compile([
+        {'_', [{"/[...]", dht_node, []}]}
+    ]),
 
-    NumAcceptors = 10,
-    TransOpts = [ {ip, {0,0,0,0}}, {port, 2938} ],
-    ProtoOpts = [{env, [{dispatch, Dispatch}]}],
-
-    {ok, _} = cowboy:start_http(chicken_poo_poo,
-        NumAcceptors, TransOpts, ProtoOpts),
-
-    {ok, Pid}.
+    {ok, _} = cowboy:start_clear(my_http_listener,
+        [{port, 2938}],
+        #{env => #{dispatch => Dispatch}}
+    ),
+    backend_sup:start_link().
 
 stop(_State) ->
     ok.
