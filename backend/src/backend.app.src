@@ -5,7 +5,9 @@
   {mod, {backend_app, []}},
   {applications,
    [kernel,
-    stdlib
+    stdlib,
+    %Add Cowboy app
+    cowboy
    ]},
   {env,[]},
   {modules, []},
