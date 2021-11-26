@@ -3,6 +3,7 @@
 -export([main/0, loop/1]).
 %% This process is simply a storing interface to show that the DHT is for indexing, and does not implement a store per se. 
 %% This is a trivial way of storing in whatever comes in the process memory 
+%% Made to be accessed by a proxy DHT node
 
 main() -> 
     io:format("Storing process is getting ready !~n"),
