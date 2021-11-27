@@ -12,7 +12,7 @@
 %Register routes
 start(_StartType, _StartArgs) ->
     %% Create the proxy storing interface
-    Store = spawn(storing_interface, main, [])
+    Store = spawn(storing_interface, main, []),
 
     %%Put routing in place with store as init data
     Dispatch = cowboy_router:compile([
