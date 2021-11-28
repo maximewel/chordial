@@ -15,13 +15,13 @@ init_node(Store) ->
 
 loop(Store, NodeId, Fingers) ->
     receive
-        %% From HTTP handler - first call to lookup with just a value to hash
-        {store, Source, Value} ->
-            store(Store, NodeId, Source, Value),
-            loop(Store, NodeId, Fingers);
-        %% Subsequent calls - we have key and value to avoid repeting the hash function call
+        %%From HTTP handler
         {store, Source, Key, Value} ->
-            store(Store, NodeId, Source, {Key, Value}),
+            store(Store, NodeId, Source, Key, Value),
+            loop(Store, NodeId, Fingers);
+        %%From another node, already hashed to avoid re-hashing constantly
+        {store, hashed, Source, Key, Value} ->
+            store(Store, NodeId, Source, Key, Value),
             loop(Store, NodeId, Fingers);
         {lookup, Source, Key} ->
             lookup(Store, Source, Key),
@@ -47,13 +47,12 @@ get_fingers() ->
     [].
 
 %% DHT indexing methods
-store(Store, NodeID, Source, Value) -> 
-    HashKey = get_hashed([Value]),
-    io:format("Key hash: ~p~n", [HashKey]),
-    store(Store, NodeID, Source, HashKey, Value).
-
 store(Store, NodeID, Source, Key, Value) -> 
+    HashKey = get_hashed([Key]),
+    io:format("Key hash: ~p~n", [HashKey]),
+    store(hashed, Store, NodeID, Source, HashKey, Value).
 
+store(hashed, Store, NodeID, Source, Key, Value) -> 
     Store ! {store, self(), {Key, Value}},
 
     receive
