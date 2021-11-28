@@ -13,10 +13,11 @@
 start(_StartType, _StartArgs) ->
     %% Create the proxy storing interface
     Store = spawn(storing_interface, main, []),
+    DhtNode = spawn(dht_node, main, [Store]),
 
     %%Put routing in place with store as init data
     Dispatch = cowboy_router:compile([
-        {'_', [{"/[...]", dht_node, [{store, Store}]}]}
+        {'_', [{"/[...]", dht_http_handler, [{dht_node, DhtNode}]}]}
     ]),
 
     {ok, _} = cowboy:start_clear(my_http_listener,
