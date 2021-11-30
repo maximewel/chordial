@@ -12,8 +12,7 @@
 %Register routes
 start(_StartType, _StartArgs) ->
     %% Create the proxy storing interface
-    Store = spawn(storing_interface, main, []),
-    DhtNode = spawn(dht_node, main, [Store]),
+    DhtNode = spawn(dht_node, main, []),
 
     %%Put routing in place with store as init data
     Dispatch = cowboy_router:compile([
