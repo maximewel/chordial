@@ -22,7 +22,12 @@ start(_StartType, _StartArgs) ->
 
     {ok, _} = cowboy:start_clear(my_http_listener,
         [{port, 2938}],
-        #{env => #{dispatch => Dispatch}}
+        #{env => 
+            #{dispatch => Dispatch},
+        middlewares =>
+            [cowboy_router,
+            ca_cowboy_middleware,
+            cowboy_handler]}
     ),
     backend_sup:start_link().
 

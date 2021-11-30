@@ -39,18 +39,21 @@
 
     <v-main>
       <HelloWorld/>
+      <Mycomp/>
     </v-main>
   </v-app>
 </template>
 
 <script>
 import HelloWorld from './components/HelloWorld';
+import Mycomp from './components/Mycomp';
 
 export default {
   name: 'App',
 
   components: {
     HelloWorld,
+    Mycomp,
   },
 
   data: () => ({

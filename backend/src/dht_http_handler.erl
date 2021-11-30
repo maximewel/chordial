@@ -50,7 +50,7 @@ init(Req0=#{path := <<"/lookup">>}, State) ->
 init(Req0, State) ->
     Req = cowboy_req:reply(200,
         #{<<"content-type">> => <<"application/json">>},
-        "\"Message\" : \"Hello\"",
+        "{\"Message\" : \"Hello\"}",
         Req0),
     
     {ok, Req, State}.
