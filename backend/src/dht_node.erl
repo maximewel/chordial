@@ -1,6 +1,6 @@
 -module(dht_node).
 
--export([main/0, main/2]).
+-export([main/0, main/1, main/2]).
 %% This process is responsible of the indexing (DHT node)
     
 main() -> 
@@ -12,6 +12,10 @@ main(PeerNodeID, PeerNodeName) ->
     {Store, Identity} = init_node(),
     Fingers = join_dht({PeerNodeID, PeerNodeName}, Identity),
     loop(Store, Identity, Fingers).
+
+main([PeerNodeID, PeerNodeName]) -> 
+    io:format("My args: ~p, ~p~n", [PeerNodeID, PeerNodeName]),
+    main(PeerNodeID, PeerNodeName).
 
 init_node()->
     io:format("DHT node powering up !~n"),
