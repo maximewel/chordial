@@ -1,0 +1,9 @@
+version: "3.9"
+services:
+    erl:
+        build: .
+        container_name: dht_node
+        environment:
+            S_NAME: "mamanoel"
+            PEER_IP: "0000000000000000000000006f411c4c84994e4065ddcd969d6b73af0fa0b4bf"
+            PEER_NAME: "papanoel@DESKTOP-RPCQHC6"
