@@ -95,10 +95,10 @@ loop(Store, Identity, Fingers) ->
     receive
         %%From HTTP handler
         {store, Source, Key, Value} ->
-            store(Store, Identity, Source, Key, Value);
+            store(Store, Identity, Fingers, Source, Key, Value);
         %%From another node, already hashed to avoid re-hashing constantly
         {store, hashed, Source, Key, Value} ->
-            store(hashed, Store, Identity, Source, Key, Value);
+            store(hashed, Store, Identity, Fingers, Source, Key, Value);
         {lookup, Source, Key} ->
             lookup(Store, Source, Key);
         {lookup, hashed, Source, Key} ->
@@ -149,15 +149,34 @@ get_state(Source, Identity, PeerList, Fingers) ->
     Successor ! {dht_state, Source, PeerList ++ [Identity]}.
 
 %%% STORE
-store(Store, Identity, Source, Key, Value) -> 
+store(Store, Identity, Fingers, Source, Key, Value) -> 
     HashKey = get_hashed([Key]),
     io:format("Key hash: ~p~n", [HashKey]),
-    store(hashed, Store, Identity, Source, HashKey, Value).
+    store(hashed, Store, Identity, Fingers, Source, HashKey, Value).
 
-store(hashed, Store, Identity, Source, Key, Value) ->
+store(hashed, Store, [NodeID, _], [{pred, PredId}, {succ, SuccId}], Source, Key, Value) ->
+    if 
+        NodeID >= Key -> 
+            if
+                Key > PredId , PredId >= NodeID -> 
+                    store(Store, Source, Key, Value);
+                true -> 
+                    PredId ! {store, hashed, Source, Key, Value}
+            end;
+        
+        true -> 
+            if 
+                PredId >= NodeID ; Key > PredId ->
+                    store(Store, Source, Key, Value);
+                true -> 
+                    SuccId ! {store, hashed, Source, Key, Value}
+            end
+    end.
+
+store(Store, Source, Key, Value) -> 
     Store ! {store, self(), {Key, Value}},
 
-    receive
+    receive 
         %Simply give the message back from the source, wether it is the http handler or another DHT node
         {store, success} -> Source ! {store, success}
     end.
@@ -170,6 +189,7 @@ lookup(Store, Source, Key) ->
 
 lookup(hashed, Store, Source, Key) ->
     Store ! {lookup, self(), Key},
+
     receive
         %Simply give the message back from the source, wether it is the http handler or another DHT node
         {lookup, Finds} -> Source ! {lookup, Finds}
