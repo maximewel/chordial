@@ -46,6 +46,25 @@ init(Req0=#{path := <<"/lookup">>}, State) ->
     
     {ok, Req, State};
 
+%Look up
+init(Req0=#{path := <<"/state">>}, State) ->
+    %%Retreive kea/value
+    io:format("Fetching DHT state ~p"),
+
+    %%Send it to store
+    {_, DhtNode} = lists:keyfind(dht_node, 1, State),
+    DhtNode ! {state, self(), Key},
+
+    receive
+        {state, Finds} ->
+            Req = cowboy_req:reply(200,
+                #{<<"content-type">> => <<"text/plain">>},
+                "Values stored for key= " ++ Key ++ ": " ++ lists:flatten(io_lib:format("~p", [Finds])),
+                Req0)
+    end,
+    
+    {ok, Req, State};
+
 %Default
 init(Req0, State) ->
     Req = cowboy_req:reply(200,
