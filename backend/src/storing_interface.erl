@@ -23,11 +23,9 @@ loop(StorageList) ->
             Lookups = find_lookups(StorageList, Key),
             Source ! {lookup, Lookups},
             loop(StorageList);
-        {delete, Source, Key} ->
-            io:format("Deleting ~p~n", [Key]),
-            NewList = delete(StorageList, Key),
-            Source ! {delete, success},
-            loop(NewList)
+        {data_dump, Source} ->
+            Source ! {data_dump_result, StorageList},
+            loop(StorageList)
     end.
 
 find_lookups(StorageList, LoookupKey) ->
@@ -38,14 +36,3 @@ find_lookups([{Key, Value} | StorageList], LoookupKey, Matches) when Key == Looo
     find_lookups(StorageList, LoookupKey, Matches ++ [{Key, Value}]);
 find_lookups([{Key, Value} | StorageList], LoookupKey, Matches) -> 
     find_lookups(StorageList, LoookupKey, Matches).
-
-
-delete(StorageList, DeleteKey) ->
-    delete(StorageList, [], DeleteKey).
-
-delete([], FinalList, _) ->
-    FinalList;
-delete([{Key, Value} | StorageList], FinalList, DeleteKey) when Key == DeleteKey->
-    delete(StorageList, FinalList, DeleteKey);
-delete([{Key, Value} | StorageList], FinalList, DeleteKey)->
-    delete(StorageList, [FinalList | {Key, Value}], DeleteKey).

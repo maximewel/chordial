@@ -106,9 +106,9 @@ loop(Store, Identity, Fingers) ->
 
         %% Messages when a DHT node wants to know every node in the DHT node
         {dht_discovery, Source} ->
-            get_state(Source, Identity, Fingers);
+            discovery_step(Source, Identity, Fingers);
         {dht_discovery, Source, PeerList} ->
-            get_state(Source, Identity, PeerList, Fingers);
+            discovery_step(Source, Identity, PeerList, Fingers);
 
         %%Update messages to change pred/succ
         {predecessor, NewPred} -> 
@@ -118,8 +118,14 @@ loop(Store, Identity, Fingers) ->
         {successor, NewSucc} -> 
             io:format("New successor: ~p~n", [NewSucc]),
             NewFingers = replace_finger(Fingers, {succ, NewSucc}),
-            loop(Store, Identity, NewFingers)
+            loop(Store, Identity, NewFingers);
 
+        %%GUI asked for the state of the dht
+        {state, Source} ->
+            state_step(Identity, Source, Fingers, Store);
+        {state, Source, Init, States} ->
+            state_step(Identity, Source, Fingers, Store, Init, States)
+        
         end,
     loop(Store, Identity, Fingers).
 
@@ -127,20 +133,20 @@ replace_finger(Fingers, {Key, Finger}) ->
     lists:keytake(Key, 1, Fingers),
     Fingers ++ [{Key, Finger}].
 
-%% DHT indexing methods
-get_state(Source, Identity, []) ->
+%% DHT discovery
+discovery_step(Source, Identity, []) ->
     Source ! {dht_discovery_finished, [Identity]};
-get_state(Source, Identity, Fingers) ->
+discovery_step(Source, Identity, Fingers) ->
     io:format("Call for DHT discovery~n"),
     case lists:keyfind(succ, 1, Fingers) of
         false -> Source ! {dht_discovery_finished, [Identity]};
         {succ, Successor} -> Successor ! {dht_discovery, Source, [Identity]}
     end.
 
-get_state(Source, Identity, [Init | PeerList], Fingers) when Init == Identity ->
+discovery_step(Source, Identity, [Init | PeerList], Fingers) when Init == Identity ->
     io:format("DHT discovery finished, peers: ~p~n", [[Init] ++ PeerList]),
     Source ! {dht_discovery_finished, [Init] ++ PeerList};
-get_state(Source, Identity, PeerList, Fingers) ->
+discovery_step(Source, Identity, PeerList, Fingers) ->
     io:format("DHT discovery step: ~n"),
     {succ, Successor} = lists:keyfind(succ, 1, Fingers),
     Successor ! {dht_discovery, Source, PeerList ++ [Identity]}.
@@ -191,3 +197,31 @@ lookup(hashed, Store, Source, Key) ->
         %Simply give the message back from the source, wether it is the http handler or another DHT node
         {lookup, Finds} -> Source ! {lookup, Finds}
     end.
+
+%% STATE OF THE DHT (data dump)
+%Init
+state_step(Identity, Source, Fingers, Store) ->
+    io:format("Initialisation - DHT state~n"),
+    Datadump = self_data_dump(Identity, Fingers, Store),
+    {succ, Successor} = lists:keyfind(succ, 1, Fingers),
+    Successor ! {state, Source, Identity, [Datadump]}.
+
+%Case: We have made a whole round
+state_step(Identity, Source, Fingers, Store, Init, States) when Init == Identity->
+    io:format("GHT state over, sending back to friend at ~p~n", [Source]),
+    Source ! {state_finished, States};
+    
+%Regular step
+state_step(Identity, Source, Fingers, Store, Init, States) ->
+    io:format("DHT step, me: ~p, init: ~p~n", [Identity, Init]),
+    Datadump = self_data_dump(Identity, Fingers, Store),
+    {succ, Successor} = lists:keyfind(succ, 1, Fingers),
+    Successor ! {state, Source, Init, States ++ [Datadump]}.
+
+%%% Data-dump this node 
+self_data_dump(Identity, Fingers, Store) ->
+    Store ! {data_dump, Identity},
+    receive
+        {data_dump_result, Storage} -> true
+    end,
+    {{identity, Identity}, {fingers, Fingers}, {storage, Storage}}.

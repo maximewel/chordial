@@ -2,6 +2,8 @@
 
 -export([init/2]).
 
+-define(QUOTE, "\"").
+
 %Store
 init(Req0=#{path := <<"/store">>}, State) ->
     %%Retreive kea/value
@@ -49,17 +51,18 @@ init(Req0=#{path := <<"/lookup">>}, State) ->
 %Look up
 init(Req0=#{path := <<"/state">>}, State) ->
     %%Retreive kea/value
-    io:format("Fetching DHT state ~p"),
+    io:format("Fetching DHT state~n"),
 
     %%Send it to store
     {_, DhtNode} = lists:keyfind(dht_node, 1, State),
-    DhtNode ! {state, self(), Key},
+    DhtNode ! {state, self()},
 
     receive
-        {state, Finds} ->
+        {state_finished, DHT_state} ->
+            io:format("Nodes to json: ~p~n", [state_to_json(DHT_state)]),
             Req = cowboy_req:reply(200,
-                #{<<"content-type">> => <<"text/plain">>},
-                "Values stored for key= " ++ Key ++ ": " ++ lists:flatten(io_lib:format("~p", [Finds])),
+                #{<<"content-type">> => <<"application/json">>},
+                state_to_json(DHT_state),
                 Req0)
     end,
     
@@ -73,3 +76,37 @@ init(Req0, State) ->
         Req0),
     
     {ok, Req, State}.
+
+
+%%% Helpers %%%
+state_to_json([FirstNode | States]) ->
+    io:format("First node : ~p~n", [FirstNode]),
+    io:format("To json : ~p~n", [node_to_json(FirstNode)]),
+
+    "{ " ++ in_quotes("nodes") ++ " : [" ++
+        state_to_json(node_to_json(FirstNode), States) ++ 
+    "]}".
+
+state_to_json(Json, []) -> Json;
+state_to_json(Json, [Node | States]) ->
+    state_to_json(Json ++ "," ++ node_to_json(Node), States).
+
+node_to_json(Node) ->
+    {{identity, Identity}, {fingers, Fingers}, {storage, Storage}} = Node,
+    "{" ++
+        identity_to_json(Identity)
+        ++
+    "}".
+
+identity_to_json({NodeID, NodeName}) ->
+    in_quotes("id") ++ " : " ++ in_quotes(atom_to_list(NodeID)) ++ ","
+    ++ in_quotes("node_name") ++ " : " ++ in_quotes(atom_to_list(NodeName)).
+
+fingers_to_json() ->
+    .
+
+storage_to_json() ->
+    .
+
+in_quotes(Message) ->
+    ?QUOTE ++ Message ++ ?QUOTE.
