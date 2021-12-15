@@ -121,10 +121,12 @@ loop(Store, Identity, Fingers) ->
         {predecessor, NewPred} -> 
             io:format("New pred: ~p~n", [NewPred]),
             NewFingers = replace_finger(Fingers, {pred, NewPred}),
+            stabilize_new_finger(pred, NewPred, Store, Identity),
             loop(Store, Identity, NewFingers);
         {successor, NewSucc} -> 
             io:format("New successor: ~p~n", [NewSucc]),
             NewFingers = replace_finger(Fingers, {succ, NewSucc}),
+            stabilize_new_finger(succ, NewSucc, Store, Identity),
             loop(Store, Identity, NewFingers);
 
         %%GUI asked for the state of the dht
@@ -136,11 +138,36 @@ loop(Store, Identity, Fingers) ->
         end,
     loop(Store, Identity, Fingers).
 
-new_pred() -> 
+stabilize_new_finger(FingerKey, Finger, Store, Identity) -> 
+    Store ! {data_dump, Identity},
+    receive
+        {data_dump_result, Storage} -> true
+    end,
+
+    case FingerKey of
+        pred -> 
+            io:format("Stabilizing predecessor~n"),
+            stabilize_predecessor(Finger, Store, Storage, Identity);
+        succ -> stabilize_successor(Finger, Store, Storage, Identity);
+        true -> io:format("Finger Key ~p not recognized ~n", [FingerKey])
+    end.
+
+stabilize_predecessor(Predecessor, Store, [], Identity) -> 
+    ok;
+stabilize_predecessor({PredecessorId, PredecessorName}, Store, [{Key, Value} | Storage], Identity) when PredecessorId > Key-> 
+    transfer_entry(Store, {Key, Value}, {PredecessorId, PredecessorName}, Identity),
+    stabilize_predecessor({PredecessorId, PredecessorName}, Store, Storage, Identity);
+stabilize_predecessor(Predecessor, Store, [{Key, Value} | Storage], Identity)-> 
+    stabilize_predecessor(Predecessor, Store, Storage, Identity).
+
+
+stabilize_successor(Successor, Store, Storage, Identity) -> 
     ok.
 
-new_succ() -> 
-    ok.
+transfer_entry(Store, {Key, Value}, Destination, Identity) ->
+    io:format("Transfering ~p from ~p to ~p~n", [Key, Identity, Destination]),
+    Store ! {delete, self(), Key},
+    Destination ! {store, hashed, Identity, Key, Value}.
 
 replace_finger(Fingers, {Key, Finger}) ->
     case lists:keytake(Key, 1, Fingers) of

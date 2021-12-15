@@ -27,7 +27,9 @@ loop(StorageList) ->
             Source ! {data_dump_result, StorageList},
             loop(StorageList);
         {delete, Source, Key} ->
+            io:format("Deleting ~p from ~p~n", [Key, StorageList]),
             NewStorage = delete(Source, Key, StorageList),
+            io:format("After deletion:  ~p~n", [NewStorage]),
             loop(NewStorage)
     end.
 
@@ -40,11 +42,12 @@ find_lookups([{Key, Value} | StorageList], LoookupKey, Matches) when Key == Looo
 find_lookups([{Key, Value} | StorageList], LoookupKey, Matches) -> 
     find_lookups(StorageList, LoookupKey, Matches).
 
-delete(Source, Key, StorageList) ->
-    case lists:keytake(Key, 1, StorageList) of
-        {value, DeletedTuple, NewStorage} ->
-            delete(Source, Key, NewStorage); %Keep deleting to ensure every entry with this key is deleted
-        false -> 
-            Source ! {delete, success}
-    end,
-    StorageList.
+delete(Source, Key, Storage) -> 
+    delete(Source, Key, [], Storage).
+
+delete(Source, Key, NewStorage, []) ->
+    NewStorage;
+delete(Source, Key, NewStorage, [{Key, Value} | StorageList]) ->
+    delete(Source, Key, NewStorage, StorageList);
+delete(Source, Key, NewStorage, [Value | StorageList]) ->
+    delete(Source, Key, NewStorage ++ [Value], StorageList).
