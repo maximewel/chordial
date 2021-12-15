@@ -1,7 +1,7 @@
 #!/bin/bash
 
-S_NAME="mamanoel"
-PEER_IP="0000000000000000000000006f411c4c84994e4065ddcd969d6b73af0fa0b4bf"
+S_NAME="a"
+PEER_IP="566681eec0bdd6886811a854f06fc6c567a8be0a"
 PEER_NAME="papanoel@DESKTOP-RPCQHC6"
 
 cd ./_build/default/lib/backend/ebin/ 

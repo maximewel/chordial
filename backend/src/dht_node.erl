@@ -14,7 +14,6 @@ main(PeerNodeID, PeerNodeName) ->
     loop(Store, Identity, Fingers).
 
 main([PeerNodeID, PeerNodeName]) -> 
-    io:format("My args: ~p, ~p~n", [PeerNodeID, PeerNodeName]),
     main(PeerNodeID, PeerNodeName).
 
 init_node()->
@@ -27,7 +26,6 @@ init_node()->
     {Store, Identity}.
 
 join_dht({PeerNodeID, PeerNodeName}, Identity) ->
-    io:format("Peer: <~p:~p>~n", [PeerNodeID, PeerNodeName]),
     %Need ID and Name as atoms
     IdAtom = list_to_atom(PeerNodeID),
     NodeNameAtom = list_to_atom(PeerNodeName),
@@ -39,15 +37,15 @@ join_dht({PeerNodeID, PeerNodeName}, Identity) ->
 get_hashed(Data) -> 
     BinData = list_to_binary(Data),
     Hash = crypto:hash(sha, BinData),
-    io_lib:format("~64.16.0b", [binary:decode_unsigned(Hash)]).
+    io_lib:format("~40.16.0b", [binary:decode_unsigned(Hash)]).
 
 %%% DHT Node initilization %%%
 get_node_id() ->
     PidAsList = pid_to_list(self()),
-    list_to_atom(get_hashed(PidAsList)).
+    NodeNameAsList = atom_to_list(node()),
+    list_to_atom(get_hashed(PidAsList ++ NodeNameAsList)).
 
 get_fingers(Peer, Identity) ->
-    io:format("Sending to: ~p~n", [Peer]),
     Peer ! {dht_discovery, self()},
     receive
         {dht_discovery_finished, PeerList} ->
@@ -60,6 +58,8 @@ fingers_in_peerlist(PeerList, Identity) ->
     {Min, Max} = min_max_fingers(PeerList),
     Predecessor = lists:last(PeerList),
     fingers_in_peerlist(PeerList, Predecessor, Identity, Min, Max).
+
+
 %% We have made the whole circle without any peer < us, we are the new little one
 fingers_in_peerlist([], _, Identity, Min, Max) ->
     Min ! { predecessor, Identity },
@@ -75,7 +75,8 @@ fingers_in_peerlist([{NextPeerID, NextPeerNode} | PeerList], {LastPeerID, LastPe
     [{pred, LastPeer}, {succ, NextPeer}];
 %%Keep exploring
 fingers_in_peerlist([NextPeer | PeerList], LastPeer, NodeID, Min, Max) -> 
-    fingers_in_peerlist(PeerList, LastPeer, NodeID, Min, Max).
+    fingers_in_peerlist(PeerList, NextPeer, NodeID, Min, Max).
+
 
 min_max_fingers([First | PeerList]) ->
     min_max_fingers(PeerList, First, First).
@@ -99,78 +100,143 @@ loop(Store, Identity, Fingers) ->
         %%From another node, already hashed to avoid re-hashing constantly
         {store, hashed, Source, Key, Value} ->
             store(hashed, Store, Identity, Fingers, Source, Key, Value);
+
+        %First call
         {lookup, Source, Key} ->
-            lookup(Store, Source, Key);
-        {lookup, hashed, Source, Key} ->
-            lookup(hashed, Store, Source, Key);
+            lookup(Store, Source, Key, Fingers, Identity);
+        %Step
+        {lookup, hashed, Source, Init, Key} ->
+            lookup(hashed, Store, Source, Identity, Key, Fingers, Init);
+        %Call finished
+        {lookup, value, Source, Node, Finds} -> 
+            Source ! {lookup, Node, Finds};
 
         %% Messages when a DHT node wants to know every node in the DHT node
         {dht_discovery, Source} ->
-            get_state(Source, Identity, Fingers);
+            discovery_step(Source, Identity, Fingers);
         {dht_discovery, Source, PeerList} ->
-            get_state(Source, Identity, PeerList, Fingers);
+            discovery_step(Source, Identity, PeerList, Fingers);
 
         %%Update messages to change pred/succ
         {predecessor, NewPred} -> 
             io:format("New pred: ~p~n", [NewPred]),
             NewFingers = replace_finger(Fingers, {pred, NewPred}),
+            stabilize_new_finger(pred, NewPred, Store, Identity),
             loop(Store, Identity, NewFingers);
         {successor, NewSucc} -> 
             io:format("New successor: ~p~n", [NewSucc]),
             NewFingers = replace_finger(Fingers, {succ, NewSucc}),
-            loop(Store, Identity, NewFingers)
+            stabilize_new_finger(succ, NewSucc, Store, Identity),
+            loop(Store, Identity, NewFingers);
 
+        %%GUI asked for the state of the dht
+        {state, Source} ->
+            state_step(Identity, Source, Fingers, Store);
+        {state, Source, Init, States} ->
+            state_step(Identity, Source, Fingers, Store, Init, States)
+        
         end,
     loop(Store, Identity, Fingers).
 
-replace_finger(Fingers, {Key, Finger}) ->
-    lists:keytake(Key, 1, Fingers),
-    Fingers ++ [{Key, Finger}].
+stabilize_new_finger(FingerKey, Finger, Store, Identity) -> 
+    Store ! {data_dump, Identity},
+    receive
+        {data_dump_result, Storage} -> true
+    end,
 
-%% DHT indexing methods
-get_state(Source, Identity, []) ->
+    case FingerKey of
+        pred -> 
+            io:format("Stabilizing predecessor~n"),
+            stabilize_predecessor(Finger, Store, Storage, Identity);
+        succ -> stabilize_successor(Finger, Store, Storage, Identity);
+        true -> io:format("Finger Key ~p not recognized ~n", [FingerKey])
+    end.
+
+stabilize_predecessor(Predecessor, Store, [], Identity) -> 
+    ok;
+stabilize_predecessor({PredecessorId, PredecessorName}, Store, [{Key, Value} | Storage], Identity) when PredecessorId > Key-> 
+    transfer_entry(Store, {Key, Value}, {PredecessorId, PredecessorName}, Identity),
+    stabilize_predecessor({PredecessorId, PredecessorName}, Store, Storage, Identity);
+stabilize_predecessor(Predecessor, Store, [{Key, Value} | Storage], Identity)-> 
+    stabilize_predecessor(Predecessor, Store, Storage, Identity).
+
+
+stabilize_successor(Successor, Store, Storage, Identity) -> 
+    ok.
+
+transfer_entry(Store, {Key, Value}, Destination, Identity) ->
+    io:format("Transfering ~p from ~p to ~p~n", [Key, Identity, Destination]),
+    Store ! {delete, self(), Key},
+    Destination ! {store, hashed, Identity, Key, Value}.
+
+replace_finger(Fingers, {Key, Finger}) ->
+    case lists:keytake(Key, 1, Fingers) of
+        {value, Tuple, TupleList2} ->
+            NewFingers = TupleList2;
+        false -> 
+            NewFingers = Fingers
+    end,
+    io:format("New fingers: ~p~n", [NewFingers ++ [{Key, Finger}]]),
+    NewFingers ++ [{Key, Finger}].
+
+%% DHT discovery
+discovery_step(Source, Identity, []) ->
     Source ! {dht_discovery_finished, [Identity]};
-get_state(Source, Identity, Fingers) ->
+discovery_step(Source, Identity, Fingers) ->
     io:format("Call for DHT discovery~n"),
     case lists:keyfind(succ, 1, Fingers) of
         false -> Source ! {dht_discovery_finished, [Identity]};
         {succ, Successor} -> Successor ! {dht_discovery, Source, [Identity]}
     end.
 
-get_state(Source, Identity, [Init | PeerList], Fingers) when Init == Identity ->
+discovery_step(Source, Identity, [Init | PeerList], Fingers) when Init == Identity ->
     io:format("DHT discovery finished, peers: ~p~n", [[Init] ++ PeerList]),
     Source ! {dht_discovery_finished, [Init] ++ PeerList};
-get_state(Source, Identity, PeerList, Fingers) ->
-    io:format("DHT discovery step: ~n"),
+discovery_step(Source, Identity, PeerList, Fingers) ->
     {succ, Successor} = lists:keyfind(succ, 1, Fingers),
+    io:format("Discovery step"),
     Successor ! {dht_discovery, Source, PeerList ++ [Identity]}.
 
 %%% STORE
 store(Store, Identity, Fingers, Source, Key, Value) -> 
-    HashKey = get_hashed([Key]),
+    HashKey = list_to_atom(get_hashed([Key])),
     io:format("Key hash: ~p~n", [HashKey]),
     store(hashed, Store, Identity, Fingers, Source, HashKey, Value).
 
-store(hashed, Store, [NodeID, _], [{pred, PredId}, {succ, SuccId}], Source, Key, Value) ->
+store(hashed, Store, Identity, [], Source, Key, Value) ->
+    store_local(Store, Source, Key, Value);
+store(hashed, Store, {NodeID, _}, Fingers, Source, Key, Value) ->
+    {succ, {SuccId, SuccNodeName}} = lists:keyfind(succ, 1, Fingers),
+    {pred, {PredId, PredNodeName}} = lists:keyfind(pred, 1, Fingers),
+
+
+    io:format("Store search. Node: ~p, Key: ~p~n", [NodeID, Key]),
+
     if 
         NodeID >= Key -> 
+            io:format("Node > Key~n"),
             if
-                Key > PredId , PredId >= NodeID -> 
-                    store(Store, Source, Key, Value);
+                Key > PredId; PredId >= NodeID -> 
+                    io:format("Local store~n"),
+                    store_local(Store, Source, Key, Value);
                 true -> 
-                    PredId ! {store, hashed, Source, Key, Value}
+                    io:format("Going to prec~n"),
+                    {PredId, PredNodeName} ! {store, hashed, Source, Key, Value}
             end;
         
-        true -> 
+        NodeID < Key -> 
+            io:format("Node < Key~n"),
             if 
-                PredId >= NodeID ; Key > PredId ->
-                    store(Store, Source, Key, Value);
+                PredId >= NodeID, Key > PredId ->
+                    io:format("Local store~n"),
+                    store_local(Store, Source, Key, Value);
                 true -> 
-                    SuccId ! {store, hashed, Source, Key, Value}
+                    io:format("Going to successor~n"),
+                    {SuccId, SuccNodeName} ! {store, hashed, Source, Key, Value}
             end
     end.
 
-store(Store, Source, Key, Value) -> 
+store_local(Store, Source, Key, Value) -> 
     Store ! {store, self(), {Key, Value}},
 
     receive 
@@ -179,15 +245,80 @@ store(Store, Source, Key, Value) ->
     end.
 
 %% LOOKUP
-lookup(Store, Source, Key) ->
-    NodeKey = get_hashed(Key),
+lookup(Store, Source, Key, Fingers, Identity) ->
+    NodeKey = list_to_atom(get_hashed(Key)),
     io:format("Key hash: ~p~n", [NodeKey]),
-    lookup(hashed, Store, Source, NodeKey).
+    lookup(hashed, Store, Source, Identity, NodeKey, Fingers, Identity).
 
-lookup(hashed, Store, Source, Key) ->
+lookup(hashed, Store, Source, Identity, Key, [], Init) ->
+    lookup_local(Store, Source, Identity, Key, Init);
+lookup(hashed, Store, Source, {NodeID, NodeName}, Key, Fingers, Init) ->
+    {succ, {SuccId, SuccNodeName}} = lists:keyfind(succ, 1, Fingers),
+    {pred, {PredId, PredNodeName}} = lists:keyfind(pred, 1, Fingers),
+
+    io:format("Lookup search. Node: ~p, Key: ~p~n", [NodeID, Key]),
+
+    if 
+        NodeID >= Key -> 
+            io:format("Node > Key~n"),
+            if
+                Key > PredId; PredId >= NodeID -> 
+                    io:format("Local lookup~n"),
+                    lookup_local(Store, Source, {NodeID, NodeName}, Key, Init);
+                true -> 
+                    io:format("Going to prec~n"),
+                    {PredId, PredNodeName} ! {lookup, hashed, Source, Init, Key}
+            end;
+        
+        NodeID < Key -> 
+            io:format("Node < Key~n"),
+            if 
+                PredId >= NodeID, Key > PredId ->
+                    io:format("Local lookup~n"),
+                    lookup_local(Store, Source, {NodeID, NodeName}, Key, Init);
+                true -> 
+                    io:format("Going to successor~n"),
+                    {SuccId, SuccNodeName} ! {lookup, hashed, Source, Init, Key}
+            end
+    end.
+
+lookup_local(Store, Source, Identity, Key, Init) ->
     Store ! {lookup, self(), Key},
 
     receive
         %Simply give the message back from the source, wether it is the http handler or another DHT node
-        {lookup, Finds} -> Source ! {lookup, Finds}
+        {lookup, Finds} -> Init ! {lookup, value, Source, Identity, Finds}
     end.
+
+%% STATE OF THE DHT (data dump)
+%Init
+state_step(Identity, Source, [], Store) ->
+    io:format("Initialisation - DHT state on single node~n"),
+    Datadump = self_data_dump(Identity, [], Store),
+    Source ! {state_finished, [Datadump]};
+
+state_step(Identity, Source, Fingers, Store) ->
+    io:format("Initialisation - DHT state~n"),
+    Datadump = self_data_dump(Identity, Fingers, Store),
+    {succ, Successor} = lists:keyfind(succ, 1, Fingers),
+    Successor ! {state, Source, Identity, [Datadump]}.
+
+%Case: We have made a whole round
+state_step(Identity, Source, Fingers, Store, Init, States) when Init == Identity->
+    io:format("GHT state over, sending back to friend at ~p~n", [Source]),
+    Source ! {state_finished, States};
+    
+%Regular step
+state_step(Identity, Source, Fingers, Store, Init, States) ->
+    io:format("DHT step, me: ~p, init: ~p~n", [Identity, Init]),
+    Datadump = self_data_dump(Identity, Fingers, Store),
+    {succ, Successor} = lists:keyfind(succ, 1, Fingers),
+    Successor ! {state, Source, Init, States ++ [Datadump]}.
+
+%%% Data-dump this node 
+self_data_dump(Identity, Fingers, Store) ->
+    Store ! {data_dump, Identity},
+    receive
+        {data_dump_result, Storage} -> true
+    end,
+    {{identity, Identity}, {fingers, Fingers}, {storage, Storage}}.
