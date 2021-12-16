@@ -131,7 +131,7 @@ store_to_json(Json, [Value | Store]) ->
     store_to_json(Json ++ "," ++ store_value_to_json(Value), Store).
 
 store_value_to_json({StoreKey, StoreValue}) ->
-    "{" ++ in_quotes(atom_to_list(StoreKey)) ++ " : " ++ in_quotes(StoreValue) ++ "}".
+    "{" ++ in_quotes("key") ++ " : " ++ in_quotes(atom_to_list(StoreKey)) ++ ", " ++ in_quotes("value") ++ " : " ++ in_quotes(StoreValue) ++ "}".
 
 lookup_to_json(Node, Finds) ->
     "{ " ++  

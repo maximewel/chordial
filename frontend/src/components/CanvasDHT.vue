@@ -15,6 +15,15 @@
                NodeID: {{currentNode.id}}
             </h4>
 
+            <div class="my-1">
+               <h4 class="body-2 secondary--text">
+                  Predecessor: {{currentNode.pred}}
+               </h4>
+               <h4 class="body-2 secondary--text">
+                  Successor: {{currentNode.succ}}
+               </h4>
+            </div>
+
             <v-data-table
                :headers="headers"
                :items="arrays"
@@ -77,14 +86,6 @@ export default {
             color: "#717171",
          },
          dht: [
-            {
-               id: 13,
-               values: ["chapi", "chapo"]
-            },
-            {
-               id: 24,
-               values: ["oyo"]
-            },
          ],
       }
    },
@@ -93,8 +94,7 @@ export default {
          let max = "";
          for (let i = 0; i < 40; ++i)
             max += "f";
-         console.log(max)
-         return 100; //parseInt(max, 16);
+         return parseInt(max, 16);
       }
    },
    mounted () {
@@ -118,15 +118,17 @@ export default {
          this.timeInit.setTime(this.timeInit.getTime() + 1000 * 10);
       },
       updateDHT() {
-         console.log("update")
-         // TODO: axios request
-         axios.get('http://localhost:2938/')
-            .then(response => (this.DHT = response.data))
+         axios.get('http://localhost:2938/state')
+            .then(response => {
+               this.dht = response.data.nodes;
+            })
       },
       displayDHT() {
          let canvas = document.getElementById("dht-canvas");
          let ctx = canvas.getContext("2d");
+         ctx.clearRect(0, 0, canvas.width, canvas.height);
          let c = { x: canvas.width / 2, y: canvas.height / 2 };
+
 
          // Ring
          ctx.strokeStyle = this.ring.color;
@@ -138,9 +140,14 @@ export default {
          // Nodes
          for (let node of this.dht) {
             let v = { x: 0, y: -this.ring.r };
-            let a = (node.id / this.max) * 2 * Math.PI;
+            let a = (parseInt(node.id, 16) / this.max) * 2 * Math.PI;
             let x = Math.cos(a) * v.x - Math.sin(a) * v.y + c.x;
             let y = Math.sin(a) * v.x + Math.cos(a) * v.y + c.y;
+
+            console.log(node);
+
+            node.x = x;
+            node.y = y;
  
             ctx.fillStyle = this.node.color;
             ctx.beginPath();
@@ -152,11 +159,25 @@ export default {
             ctx.beginPath();
             ctx.arc(x, y, this.node.r, 0, 2 * Math.PI);
             ctx.stroke();
-  
+
+            ctx.fillStyle = "black";
+            ctx.textBaseline = 'middle';
+            ctx.textAlign = "center"; 
+            ctx.font = "30px Arial";
+            ctx.fillText(node.storage.length, x, y);
+
          }
       },
-      displayDHTValues(){
-         // TODO
+      displayDHTValues(nodeToDisplay){
+         console.log(nodeToDisplay.fingers);
+         const fingers = nodeToDisplay.fingers;
+         this.currentNode = {
+            name: nodeToDisplay.node_name,
+            id: nodeToDisplay.id,
+            pred: `${fingers.pred.id} at ${fingers.pred.node_name}`,
+            succ: `${fingers.succ.id} at ${fingers.succ.node_name}`,
+         },
+         this.arrays = nodeToDisplay.storage;
       },
       onCanvasClick(e) {
          let canvas = document.getElementById("dht-canvas");
@@ -164,8 +185,15 @@ export default {
          let x = ((e.clientX - cRect.left) / cRect.width) * canvas.width;
          let y = ((e.clientY - cRect.top) / cRect.height) * canvas.height;
 
-         console.log(x,y)
-         // TODO
+         for (let node of this.dht) {
+            let dx = node.x - x;
+            let dy = node.y - y;
+            let distance = Math.sqrt(dx*dx + dy*dy);
+
+            if(distance <= this.node.r){
+               this.displayDHTValues(node);
+            }
+         }
       }
    },
    watch: {
