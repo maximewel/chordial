@@ -3,7 +3,6 @@
 PEER_IP="566681eec0bdd6886811a854f06fc6c567a8be0a"
 PEER_NAME="papanoel@DESKTOP-RPCQHC6"
 
-
 cd ../_build/default/lib/backend/ebin/ 
 for i in node_{0..50}
 do 

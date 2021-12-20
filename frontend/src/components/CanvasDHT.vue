@@ -56,21 +56,17 @@ export default {
    data() {
       return {
          currentNode: {
-            name: "Node_1@Desktop",
-            id: "6f411c4c84994e4065ddcd969d6b73af0fa0b4bf"
+            name: "Node_name@Desktop",
+            id: "Node ID as SHA-1"
          },
          headers: [
             {text: 'Key', align: 'start', value: 'key'},
             {text: 'Value', value: 'value', sortable: false},
          ],
          arrays: [
-            { key: 123, value: "oyo"},
-            { key: 1, value: "oysado"},
-            { key: 42, value: "oao"},
-            { key: 93, value: "ah"},
-            { key: 93, value: "ah"},
-            { key: 33, value: "fafs"},
-            { key: 53, value: "323"},
+            { key: "Key1", value: "Value1"},
+            { key: "Key2", value: "Value2"},
+            { key: "Key3", value: "Value3"},
          ],
 
          dt: 0,
@@ -122,6 +118,10 @@ export default {
             .then(response => {
                this.dht = response.data.nodes;
             })
+            .catch(err => {
+               console.log("Could not update DHT : " + err);
+               this.dht = [];
+            })
       },
       displayDHT() {
          let canvas = document.getElementById("dht-canvas");
@@ -169,14 +169,22 @@ export default {
          }
       },
       displayDHTValues(nodeToDisplay){
-         console.log(nodeToDisplay.fingers);
-         const fingers = nodeToDisplay.fingers;
-         this.currentNode = {
+         let currentNodeObject = {
             name: nodeToDisplay.node_name,
             id: nodeToDisplay.id,
-            pred: `${fingers.pred.id} at ${fingers.pred.node_name}`,
-            succ: `${fingers.succ.id} at ${fingers.succ.node_name}`,
-         },
+         };
+
+         const fingers = nodeToDisplay.fingers;
+         if(fingers.length > 0){
+            console.log(fingers);
+            currentNodeObject.pred = `${fingers.pred.id} at ${fingers.pred.node_name}`;
+            currentNodeObject.succ = `${fingers.succ.id} at ${fingers.succ.node_name}`;
+         } else {
+            currentNodeObject.pred = "No finger";
+            currentNodeObject.succ = "No finger";
+         }
+
+         this.currentNode = currentNodeObject;
          this.arrays = nodeToDisplay.storage;
       },
       onCanvasClick(e) {
