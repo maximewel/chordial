@@ -13,8 +13,7 @@
          SEARCH
       </v-btn>
 
-      
-      <v-text-field class="mt-2 mx-5" filled dense rounded readonly :value="result"></v-text-field>
+      <v-textarea class="mt-2 mx-5" filled dense rounded readonly auto-grow rows="1" :value="result"></v-textarea>
    </v-sheet>
 </template>
 
@@ -44,7 +43,7 @@ export default {
                   const nodeID = response.data.node.id;
                   const nodeName = response.data.node.node_name;
 
-                  this.result = `${key} = ${values} from node (${nodeID} at ${nodeName})`;
+                  this.result = `${key} = ${values} from node ${nodeID} at ${nodeName}`;
                }
             })
             .catch(reason => {
